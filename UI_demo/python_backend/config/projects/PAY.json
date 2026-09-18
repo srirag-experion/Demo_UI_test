@@ -1,0 +1,62 @@
+{
+  "project_id": "PAY",
+  "name": "Payment Microservice",
+  "organization": "Astra Fintech",
+  "environment": "production",
+  "enabled": true,
+  "llm": {
+    "provider": "anthropic",
+    "model": "claude-3-7-sonnet-20250219",
+    "temperature": 0.1,
+    "max_tokens": 8192
+  },
+  "git": {
+    "provider": "github",
+    "owner": "Astra-Global",
+    "repo": "payment-microservice",
+    "default_branch": "main",
+    "target_branch": "main",
+    "token": "ghp_payment_token_88921",
+    "enable_pr_comments": true,
+    "auto_trigger_on_push": true
+  },
+  "jira": {
+    "base_url": "https://astratech.atlassian.net",
+    "email": "payments-bot@astratech.internal",
+    "api_token": "ATATT3xFfGF0d-payments",
+    "project_key": "PAY",
+    "issue_type": "Bug / Security",
+    "trigger_status": "Ready for Agent",
+    "status_working": "Agent Working",
+    "status_pr_created": "PR Created",
+    "status_failed": "Agent Failed"
+  },
+  "test_runner": {
+    "framework": "pytest",
+    "config_path": "./pytest.ini",
+    "test_command": "pytest -v --tb=short",
+    "lint_command": "ruff check .",
+    "build_command": "pip install -e .",
+    "timeout_minutes": 8
+  },
+  "rag": {
+    "docs_path": "./docs/api,./specs/stripe",
+    "chroma_collection": "project-docs-PAY",
+    "embedding_model": "text-embedding-3-small",
+    "chunk_size": 400,
+    "chunk_overlap": 40
+  },
+  "goose": {
+    "model": "claude-3-7-sonnet",
+    "autonomy_level": "semi-autonomous",
+    "sandbox_dir": "/workspace/payment-microservice",
+    "max_iterations": 20,
+    "require_approval_for_dangerous_commands": true
+  },
+  "notifications": {
+    "slack_webhook_url": "https://hooks.slack.com/services/T00/B00/PAY",
+    "slack_channel": "#payment-alerts",
+    "notify_on_failure": true,
+    "notify_on_pr": true
+  }
+}
