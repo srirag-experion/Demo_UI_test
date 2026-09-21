@@ -324,17 +324,17 @@ export const CodeGraphSection: React.FC = () => {
       </div>
 
       {/* View Mode Navigation Tabs */}
-      <div className="flex items-center space-x-2 bg-slate-200/60 p-1 rounded-xl w-fit text-xs select-none">
+      <div className="flex items-center space-x-1.5 bg-slate-200/70 p-1 rounded-xl w-fit text-xs select-none">
         <button
           type="button"
           onClick={() => setViewMode('galaxy3d')}
           className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
             viewMode === 'galaxy3d'
-              ? 'bg-slate-900 text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
+              ? 'bg-white text-slate-900 shadow-xs'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
           }`}
         >
-          <Sparkles size={14} className={viewMode === 'galaxy3d' ? 'text-[#00f5ff]' : ''} />
+          <Sparkles size={14} className={viewMode === 'galaxy3d' ? 'text-cyan-500' : 'text-slate-400'} />
           <span>3D Celestial Galaxy</span>
         </button>
 
@@ -344,10 +344,10 @@ export const CodeGraphSection: React.FC = () => {
           className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
             viewMode === 'graph2d'
               ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
           }`}
         >
-          <LayoutGrid size={14} className={viewMode === 'graph2d' ? 'text-[#84cc16]' : ''} />
+          <LayoutGrid size={14} className={viewMode === 'graph2d' ? 'text-[#84cc16]' : 'text-slate-400'} />
           <span>2D Architecture Layers</span>
         </button>
 
@@ -357,10 +357,10 @@ export const CodeGraphSection: React.FC = () => {
           className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
             viewMode === 'schema'
               ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
           }`}
         >
-          <Database size={14} className={viewMode === 'schema' ? 'text-amber-500' : ''} />
+          <Database size={14} className={viewMode === 'schema' ? 'text-amber-500' : 'text-slate-400'} />
           <span>Data Structures & Schemas ({memory.schemas.length})</span>
         </button>
 
@@ -370,10 +370,10 @@ export const CodeGraphSection: React.FC = () => {
           className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
             viewMode === 'impact'
               ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
           }`}
         >
-          <Zap size={14} className={viewMode === 'impact' ? 'text-rose-500' : ''} />
+          <Zap size={14} className={viewMode === 'impact' ? 'text-rose-500' : 'text-slate-400'} />
           <span>Impact Blast-Radius</span>
         </button>
 
@@ -383,10 +383,10 @@ export const CodeGraphSection: React.FC = () => {
           className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
             viewMode === 'rules'
               ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
           }`}
         >
-          <BookOpen size={14} className={viewMode === 'rules' ? 'text-blue-500' : ''} />
+          <BookOpen size={14} className={viewMode === 'rules' ? 'text-blue-500' : 'text-slate-400'} />
           <span>Architectural Rules ({memory.rules.length})</span>
         </button>
       </div>

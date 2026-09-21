@@ -23,15 +23,15 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
         title: 'API & Ingress',
         matchTypes: ['Route', 'api', 'Router', 'Endpoint'],
         x: 40,
-        color: 'text-lime-700 bg-lime-50 border-lime-200',
-        badgeColor: 'bg-[#94d320] text-slate-950',
+        color: 'text-lime-800 bg-lime-50 border-lime-300',
+        badgeColor: 'bg-[#84cc16] text-slate-950',
       },
       {
         id: 'service',
         title: 'Core Logic & Services',
         matchTypes: ['Function', 'Method', 'service', 'Service', 'Controller', 'Handler'],
         x: 340,
-        color: 'text-blue-700 bg-blue-50 border-blue-200',
+        color: 'text-blue-800 bg-blue-50 border-blue-300',
         badgeColor: 'bg-blue-600 text-white',
       },
       {
@@ -39,7 +39,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
         title: 'Data Models & Schemas',
         matchTypes: ['Class', 'Model', 'Schema', 'Interface', 'Enum', 'Type', 'database'],
         x: 640,
-        color: 'text-amber-700 bg-amber-50 border-amber-200',
+        color: 'text-amber-800 bg-amber-50 border-amber-300',
         badgeColor: 'bg-amber-500 text-white',
       },
       {
@@ -47,7 +47,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
         title: 'Utilities & Clients',
         matchTypes: ['Field', 'Variable', 'util', 'Client', 'Helper'],
         x: 940,
-        color: 'text-emerald-700 bg-emerald-50 border-emerald-200',
+        color: 'text-emerald-800 bg-emerald-50 border-emerald-300',
         badgeColor: 'bg-emerald-600 text-white',
       },
       {
@@ -55,7 +55,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
         title: 'Test Suites & Modules',
         matchTypes: ['test', 'File', 'Folder', 'Module'],
         x: 1240,
-        color: 'text-purple-700 bg-purple-50 border-purple-200',
+        color: 'text-purple-800 bg-purple-50 border-purple-300',
         badgeColor: 'bg-purple-600 text-white',
       },
     ],
@@ -104,7 +104,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
       for (let r = 0; r < limit; r++) {
         const node = bucket[r];
         const x = layerLanes[laneIdx].x;
-        const y = 64 + r * 94; // Exactly 94px vertical step per card
+        const y = 64 + r * 122; // 122px vertical step gives 24px gap for 98px tall cards
         laneCounters[laneIdx]++;
         posMap.set(node.id, { x, y });
         placed.push({
@@ -124,7 +124,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
   }, [filteredNodes, maxPerLane, layerLanes]);
 
   const canvasW = 1540;
-  const canvasH = Math.max(680, 80 + maxRowCount * 96);
+  const canvasH = Math.max(680, 100 + maxRowCount * 124);
 
   const handleNodeClick = (node: GraphNode) => {
     setSelectedNode(node);
@@ -136,44 +136,56 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
     switch (laneIdx) {
       case 0:
         return {
-          bg: 'bg-[#edf8c7]/95 hover:bg-[#e4f3a8]',
-          border: 'border-[#94d320]',
+          bg: 'bg-lime-50/95 hover:bg-lime-100/90',
+          border: 'border-lime-300 hover:border-lime-500',
           text: 'text-slate-900',
+          fileText: 'text-slate-600',
+          metricsText: 'text-slate-700',
           badge: 'bg-[#84cc16] text-slate-950',
         };
       case 1:
         return {
           bg: 'bg-blue-50/95 hover:bg-blue-100/90',
-          border: 'border-blue-300',
-          text: 'text-blue-950',
+          border: 'border-blue-300 hover:border-blue-500',
+          text: 'text-slate-900',
+          fileText: 'text-slate-600',
+          metricsText: 'text-slate-700',
           badge: 'bg-blue-600 text-white',
         };
       case 2:
         return {
           bg: 'bg-amber-50/95 hover:bg-amber-100/90',
-          border: 'border-amber-300',
-          text: 'text-amber-950',
+          border: 'border-amber-300 hover:border-amber-500',
+          text: 'text-slate-900',
+          fileText: 'text-slate-600',
+          metricsText: 'text-slate-700',
           badge: 'bg-amber-500 text-white',
         };
       case 3:
         return {
           bg: 'bg-emerald-50/95 hover:bg-emerald-100/90',
-          border: 'border-emerald-300',
-          text: 'text-emerald-950',
+          border: 'border-emerald-300 hover:border-emerald-500',
+          text: 'text-slate-900',
+          fileText: 'text-slate-600',
+          metricsText: 'text-slate-700',
           badge: 'bg-emerald-600 text-white',
         };
       case 4:
         return {
           bg: 'bg-purple-50/95 hover:bg-purple-100/90',
-          border: 'border-purple-300',
-          text: 'text-purple-950',
+          border: 'border-purple-300 hover:border-purple-500',
+          text: 'text-slate-900',
+          fileText: 'text-slate-600',
+          metricsText: 'text-slate-700',
           badge: 'bg-purple-600 text-white',
         };
       default:
         return {
           bg: 'bg-slate-50/95 hover:bg-slate-100',
-          border: 'border-slate-300',
+          border: 'border-slate-300 hover:border-slate-400',
           text: 'text-slate-900',
+          fileText: 'text-slate-600',
+          metricsText: 'text-slate-700',
           badge: 'bg-slate-700 text-white',
         };
     }
@@ -269,7 +281,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
       {/* Main Canvas Area — scrollable container */}
       <div
         className="relative w-full bg-[#fafbfc] border border-slate-200/80 rounded-2xl overflow-auto shadow-2xs"
-        style={{ minHeight: 520, maxHeight: 720 }}
+        style={{ minHeight: 560, maxHeight: 780 }}
       >
         {/* Empty State */}
         {filteredNodes.length === 0 && (
@@ -300,7 +312,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
             <div
               key={col.title}
               style={{ left: `${col.x}px`, top: '12px' }}
-              className={`absolute w-64 py-1.5 px-3 rounded-lg border text-[11px] font-bold uppercase tracking-wider text-center shadow-2xs pointer-events-none z-10 ${col.color}`}
+              className={`absolute w-64 py-2 px-3 rounded-lg border text-[11px] font-bold uppercase tracking-wider text-center shadow-2xs pointer-events-none z-10 ${col.color}`}
             >
               {col.title}
             </div>
@@ -334,9 +346,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
               if (p1.x < p2.x) {
                 // Source is left of Target
                 x1 = p1.x + 256;
-                y1 = p1.y + 40;
+                y1 = p1.y + 49;
                 x2 = p2.x;
-                y2 = p2.y + 40;
+                y2 = p2.y + 49;
                 const dx = Math.max(30, (x2 - x1) / 2);
                 cx1 = x1 + dx;
                 cy1 = y1;
@@ -345,7 +357,7 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
               } else if (p1.x > p2.x) {
                 // Backward connection
                 x1 = p1.x + 128;
-                y1 = p1.y + 80;
+                y1 = p1.y + 98;
                 x2 = p2.x + 128;
                 y2 = p2.y;
                 cx1 = x1;
@@ -355,9 +367,9 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
               } else {
                 // Same column vertical connection
                 x1 = p1.x + 256;
-                y1 = p1.y + 40;
+                y1 = p1.y + 49;
                 x2 = p2.x + 256;
-                y2 = p2.y + 40;
+                y2 = p2.y + 49;
                 cx1 = x1 + 25;
                 cy1 = y1 + 10;
                 cx2 = x2 + 25;
@@ -377,11 +389,14 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
                     <text
                       x={(x1 + x2) / 2}
                       y={(y1 + y2) / 2 - 4}
-                      fill="#64748b"
-                      fontSize="9"
+                      fill="#475569"
+                      fontSize="9.5"
                       fontWeight="600"
                       fontFamily="sans-serif"
                       textAnchor="middle"
+                      stroke="#f8fafc"
+                      strokeWidth="3"
+                      paintOrder="stroke"
                     >
                       {edge.label}
                     </text>
@@ -401,20 +416,27 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
                   key={node.id}
                   onClick={() => handleNodeClick(node)}
                   style={{ left: `${node.computedX}px`, top: `${node.computedY}px` }}
-                  className={`absolute w-64 p-3 rounded-xl border shadow-2xs cursor-pointer transition-all hover:scale-[1.02] hover:shadow-md ${style.bg} ${
+                  className={`absolute w-64 h-[98px] p-2.5 rounded-xl border shadow-2xs cursor-pointer transition-all flex flex-col justify-between hover:scale-[1.02] hover:shadow-md ${style.bg} ${
                     isSelected ? 'ring-2 ring-lime-400 border-lime-500 shadow-md scale-[1.03]' : style.border
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full ${style.badge}`}>
-                      {node.type}
-                    </span>
-                    <span className="text-[10px] font-mono text-slate-400 font-semibold">L{node.line || 1}</span>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md shadow-2xs ${style.badge}`}>
+                        {node.type}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-500 font-bold">L{node.line || 1}</span>
+                    </div>
+                    <div className={`text-xs font-extrabold truncate ${style.text}`} title={node.label}>
+                      {node.label}
+                    </div>
+                    <div className={`text-[10px] font-mono truncate mt-0.5 ${style.fileText}`} title={node.file}>
+                      {node.file}
+                    </div>
                   </div>
-                  <div className={`text-xs font-bold truncate ${style.text}`}>{node.label}</div>
-                  <div className="text-[10px] text-slate-500 font-mono truncate mt-0.5">{node.file}</div>
+
                   {node.metrics && (
-                    <div className="mt-1.5 pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[9px] text-slate-600 font-mono font-medium">
+                    <div className={`pt-1 border-t border-slate-200/90 flex items-center justify-between text-[9.5px] font-mono font-bold ${style.metricsText}`}>
                       <span>In: {node.metrics.callersCount}</span>
                       <span>Out: {node.metrics.calleesCount}</span>
                     </div>
@@ -426,17 +448,17 @@ export const GraphCanvas: React.FC<GraphCanvasProps> = ({ nodes, edges, onSelect
         </div>
 
         {/* Bottom Legend */}
-        <div className="sticky bottom-0 left-0 bg-white/95 backdrop-blur-xs p-2.5 border-t border-slate-200 flex items-center space-x-4 text-[10px] font-semibold text-slate-600 z-20">
-          <span className="text-slate-400 font-mono font-bold mr-1">{positionedNodes.length} nodes displayed</span>
+        <div className="sticky bottom-0 left-0 bg-white/95 backdrop-blur-xs p-2.5 border-t border-slate-200 flex items-center space-x-4 text-[10px] font-semibold text-slate-700 z-20">
+          <span className="text-slate-500 font-mono font-bold mr-1">{positionedNodes.length} nodes displayed</span>
           {[
-            ['API / Routes', '#94d320'],
-            ['Services / Functions', '#3b82f6'],
-            ['Models / Classes', '#f59e0b'],
-            ['Utilities / Fields', '#10b981'],
-            ['Tests / Files', '#a855f7'],
+            ['API / Routes', '#84cc16'],
+            ['Services / Functions', '#2563eb'],
+            ['Models / Classes', '#d97706'],
+            ['Utilities / Fields', '#059669'],
+            ['Tests / Files', '#9333ea'],
           ].map(([label, color]) => (
             <div key={label} className="flex items-center space-x-1.5">
-              <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
               <span>{label}</span>
             </div>
           ))}
