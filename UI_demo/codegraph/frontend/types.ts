@@ -1,14 +1,38 @@
-export type NodeType = 'api' | 'service' | 'database' | 'test' | 'middleware' | 'util';
+export type NodeType =
+  | 'Function'
+  | 'Field'
+  | 'Class'
+  | 'File'
+  | 'Module'
+  | 'Variable'
+  | 'Folder'
+  | 'Enum'
+  | 'Method'
+  | 'Interface'
+  | 'Route'
+  | 'Type'
+  | 'Project'
+  | 'api'
+  | 'service'
+  | 'database'
+  | 'test'
+  | 'middleware'
+  | 'util';
 
 export interface GraphNode {
   id: string;
   label: string;
-  type: NodeType;
+  type: string;
   file: string;
   line?: number;
   description?: string;
   x: number;
   y: number;
+  z?: number;
+  gridX?: number;
+  gridY?: number;
+  color?: string;
+  size?: number;
   metrics?: {
     callersCount: number;
     calleesCount: number;
@@ -20,8 +44,8 @@ export interface GraphEdge {
   id: string;
   source: string;
   target: string;
-  label?: string; // 'calls' | 'imports' | 'queries' | 'tests'
-  type?: 'calls' | 'imports' | 'queries' | 'tests';
+  label?: string;
+  type?: string;
 }
 
 export interface SchemaField {
@@ -53,7 +77,7 @@ export interface ArchitecturalRule {
   id: string;
   ruleTitle: string;
   description: string;
-  scope: string; // e.g. 'PaymentService', 'All API Endpoints'
+  scope: string;
   severity: 'strict' | 'warning' | 'info';
   createdAt: string;
   enforcedBy: string;
@@ -70,4 +94,8 @@ export interface ProjectCodebaseMemory {
   edges: GraphEdge[];
   schemas: SchemaModel[];
   rules: ArchitecturalRule[];
+  node_types_count?: Record<string, number>;
+  edge_types_count?: Record<string, number>;
+  dir_counts?: Record<string, number>;
 }
+
