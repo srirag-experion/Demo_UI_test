@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
-import { Search, X, RefreshCw } from 'lucide-react';
+import { Search, RefreshCw } from 'lucide-react';
 import { GraphNode, GraphEdge } from './types';
 
 interface CelestialMemoryGraphProps {
@@ -32,27 +32,6 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
   const [selectedDir, setSelectedDir] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 
-  // Node & Edge filter toggles
-  const [activeNodeTypes, setActiveNodeTypes] = useState<Set<string>>(() => {
-    const s = new Set<string>();
-    Object.keys(nodeTypesCount).forEach((k) => s.add(k));
-    if (s.size === 0) {
-      ['Function', 'Field', 'Class', 'File', 'Module', 'Variable', 'Folder', 'Enum', 'Method', 'Interface', 'Route', 'Type'].forEach(
-        (t) => s.add(t)
-      );
-    }
-    return s;
-  });
-
-  const [activeEdgeTypes, setActiveEdgeTypes] = useState<Set<string>>(() => {
-    const s = new Set<string>();
-    Object.keys(edgeTypesCount).forEach((k) => s.add(k));
-    if (s.size === 0) {
-      ['defines', 'usage', 'calls', 'contains file', 'contains folder', 'writes', 'imports', 'inherits'].forEach((t) => s.add(t));
-    }
-    return s;
-  });
-
   // Color Map
   const nodeTypeColors: Record<string, string> = {
     Function: '#00f5ff',
@@ -75,10 +54,50 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
     test: '#a855f7',
   };
 
+  // Node & Edge filter toggles — initialized with all types
+  const [activeNodeTypes, setActiveNodeTypes] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    nodes.forEach((n) => { if (n.type) s.add(n.type); });
+    Object.keys(nodeTypesCount).forEach((k) => s.add(k));
+    if (s.size === 0) {
+      ['Function', 'Field', 'Class', 'File', 'Module', 'Variable', 'Folder', 'Enum', 'Method', 'Interface', 'Route', 'Type', 'api', 'service', 'database', 'util', 'test'].forEach((t) => s.add(t));
+    }
+    return s;
+  });
+
+  const [activeEdgeTypes, setActiveEdgeTypes] = useState<Set<string>>(() => {
+    const s = new Set<string>();
+    edges.forEach((e) => { if (e.type) s.add(e.type); });
+    Object.keys(edgeTypesCount).forEach((k) => s.add(k));
+    if (s.size === 0) {
+      ['defines', 'usage', 'calls', 'contains file', 'contains folder', 'writes', 'imports', 'inherits', 'defines method', 'queries', 'tests'].forEach((t) => s.add(t));
+    }
+    return s;
+  });
+
+  // Keep active types in sync whenever nodes/edges or project changes
+  useEffect(() => {
+    const allTypes = new Set<string>();
+    nodes.forEach((n) => { if (n.type) allTypes.add(n.type); });
+    Object.keys(nodeTypesCount).forEach((k) => allTypes.add(k));
+    if (allTypes.size === 0) {
+      ['Function', 'Field', 'Class', 'File', 'Module', 'Variable', 'Folder', 'Enum', 'Method', 'Interface', 'Route', 'Type', 'api', 'service', 'database', 'util', 'test'].forEach((t) => allTypes.add(t));
+    }
+    setActiveNodeTypes(allTypes);
+
+    const allEdges = new Set<string>();
+    edges.forEach((e) => { if (e.type) allEdges.add(e.type); });
+    Object.keys(edgeTypesCount).forEach((k) => allEdges.add(k));
+    if (allEdges.size === 0) {
+      ['defines', 'usage', 'calls', 'contains file', 'contains folder', 'writes', 'imports', 'inherits', 'defines method', 'queries', 'tests'].forEach((t) => allEdges.add(t));
+    }
+    setActiveEdgeTypes(allEdges);
+  }, [nodes, edges, nodeTypesCount, edgeTypesCount]);
+
   // Filtered nodes
   const filteredNodes = useMemo(() => {
-    return nodes.filter((n) => {
-      const typeMatch = activeNodeTypes.has(n.type);
+    const res = nodes.filter((n) => {
+      const typeMatch = activeNodeTypes.has(n.type) || activeNodeTypes.size === 0;
       const searchMatch =
         !searchQuery ||
         n.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -86,6 +105,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
       const dirMatch = !selectedDir || n.file.startsWith(selectedDir) || n.file === selectedDir;
       return typeMatch && searchMatch && dirMatch;
     });
+    return res.length > 0 ? res : nodes;
   }, [nodes, activeNodeTypes, searchQuery, selectedDir]);
 
   const filteredNodeIdSet = useMemo(() => new Set(filteredNodes.map((n) => n.id)), [filteredNodes]);
@@ -93,7 +113,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
   const filteredEdges = useMemo(() => {
     return edges.filter((e) => {
       const edgeType = e.type || 'calls';
-      const typeMatch = activeEdgeTypes.has(edgeType);
+      const typeMatch = activeEdgeTypes.has(edgeType) || activeEdgeTypes.size === 0;
       const nodesVisible = filteredNodeIdSet.has(e.source) && filteredNodeIdSet.has(e.target);
       return typeMatch && nodesVisible;
     });
@@ -101,12 +121,9 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
 
   const toggleAllNodeTypes = (enable: boolean) => {
     if (enable) {
-      const all = new Set(Object.keys(nodeTypesCount));
-      if (all.size === 0) {
-        ['Function', 'Field', 'Class', 'File', 'Module', 'Variable', 'Folder', 'Enum', 'Method', 'Interface', 'Route', 'Type'].forEach(
-          (t) => all.add(t)
-        );
-      }
+      const all = new Set<string>();
+      nodes.forEach((n) => { if (n.type) all.add(n.type); });
+      Object.keys(nodeTypesCount).forEach((k) => all.add(k));
       setActiveNodeTypes(all);
     } else {
       setActiveNodeTypes(new Set());
@@ -143,7 +160,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
     scene.fog = new THREE.FogExp2(0x060a10, 0.001);
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 1, 4000);
-    camera.position.set(0, 40, 520);
+    camera.position.set(0, 30, 480);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     renderer.setClearColor(0x060a10, 1.0);
@@ -154,15 +171,15 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
 
     // Particle Starfield Background
     const starsGeo = new THREE.BufferGeometry();
-    const starsCount = 1000;
+    const starsCount = 800;
     const starPositions = new Float32Array(starsCount * 3);
     for (let i = 0; i < starsCount * 3; i += 3) {
-      starPositions[i] = (Math.random() - 0.5) * 1800;
-      starPositions[i + 1] = (Math.random() - 0.5) * 1800;
-      starPositions[i + 2] = (Math.random() - 0.5) * 1800;
+      starPositions[i] = (Math.random() - 0.5) * 1600;
+      starPositions[i + 1] = (Math.random() - 0.5) * 1600;
+      starPositions[i + 2] = (Math.random() - 0.5) * 1600;
     }
     starsGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-    const starsMat = new THREE.PointsMaterial({ color: 0x1e293b, size: 1.5, transparent: true, opacity: 0.5 });
+    const starsMat = new THREE.PointsMaterial({ color: 0x334155, size: 1.5, transparent: true, opacity: 0.6 });
     const starsField = new THREE.Points(starsGeo, starsMat);
     scene.add(starsField);
 
@@ -172,7 +189,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
 
     // Node & Edge Cache
     const nodePositionMap = new Map<string, THREE.Vector3>();
-    const sphereGeo = new THREE.SphereGeometry(1, 10, 10);
+    const sphereGeo = new THREE.SphereGeometry(1, 12, 12);
     const materialCache = new Map<string, THREE.MeshBasicMaterial>();
 
     const getMaterial = (colorHex: string) => {
@@ -184,17 +201,30 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
 
     const interactiveMeshes: THREE.Mesh[] = [];
 
-    // 1. Build Node Meshes
-    filteredNodes.forEach((node) => {
-      const pos = new THREE.Vector3(
-        node.x ?? (Math.random() - 0.5) * 280,
-        node.y ?? (Math.random() - 0.5) * 280,
-        node.z ?? (Math.random() - 0.5) * 280
-      );
+    // 1. Build Node Meshes — Centered in 3D Space
+    const totalN = Math.max(1, filteredNodes.length);
+    filteredNodes.forEach((node, idx) => {
+      let pos: THREE.Vector3;
+
+      if (node.z !== undefined && typeof node.x === 'number' && Math.abs(node.x) <= 300) {
+        // Native 3D coordinates present
+        pos = new THREE.Vector3(node.x, node.y ?? 0, node.z);
+      } else {
+        // Distribute along spherical 3D celestial shell
+        const phi = Math.acos(-1.0 + (2.0 * idx) / totalN);
+        const theta = Math.sqrt(totalN * Math.PI) * phi;
+        const radius = 180.0 + (idx % 3) * 30.0;
+        pos = new THREE.Vector3(
+          radius * Math.cos(theta) * Math.sin(phi),
+          radius * Math.sin(theta) * Math.sin(phi),
+          radius * Math.cos(phi)
+        );
+      }
+
       nodePositionMap.set(node.id, pos);
 
       const colorHex = nodeTypeColors[node.type] || node.color || '#00f5ff';
-      const size = node.size || (node.type === 'Class' || node.type === 'Route' ? 4.5 : node.type === 'File' ? 3.5 : 2.2);
+      const size = node.size || (['Class', 'Route', 'api', 'Project'].includes(node.type) ? 4.5 : ['File', 'Folder', 'service'].includes(node.type) ? 3.5 : 2.5);
 
       const mesh = new THREE.Mesh(sphereGeo, getMaterial(colorHex));
       mesh.position.copy(pos);
@@ -216,7 +246,9 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
         linePositions.push(p1.x, p1.y, p1.z);
         linePositions.push(p2.x, p2.y, p2.z);
 
-        const c1 = new THREE.Color(edge.type === 'calls' ? 0x00f5ff : edge.type === 'defines' ? 0x10b981 : 0xa855f7);
+        const isCalls = edge.type === 'calls' || edge.type === 'queries';
+        const isDefines = edge.type === 'defines' || edge.type === 'defines method';
+        const c1 = new THREE.Color(isCalls ? 0x00f5ff : isDefines ? 0x10b981 : 0xa855f7);
         const c2 = new THREE.Color(0x38bdf8);
 
         lineColors.push(c1.r, c1.g, c1.b);
@@ -232,7 +264,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
       const edgeMat = new THREE.LineBasicMaterial({
         vertexColors: true,
         transparent: true,
-        opacity: 0.35,
+        opacity: 0.45,
         blending: THREE.AdditiveBlending,
       });
 
@@ -240,7 +272,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
       graphGroup.add(lineSegments);
     }
 
-    // 3. Fast Interaction Handlers (ZERO React setState during mousemove!)
+    // 3. Fast Interaction Handlers
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
     let autoRotate = true;
@@ -271,7 +303,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
         previousMousePosition = { x: e.clientX, y: e.clientY };
       }
 
-      // Fast Raycasting check directly on DOM tooltip (0 React re-renders)
+      // Fast Raycasting check directly on DOM tooltip
       if (tooltipRef.current && clientX >= 0 && clientX <= width && clientY >= 0 && clientY <= height) {
         mouseVector.x = (clientX / width) * 2 - 1;
         mouseVector.y = -(clientY / height) * 2 + 1;
@@ -350,11 +382,9 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
     let animId: number;
     const animate = () => {
       animId = requestAnimationFrame(animate);
-
       if (autoRotate) {
         graphGroup.rotation.y += 0.0012;
       }
-
       renderer.render(scene, camera);
     };
     animate();
@@ -405,19 +435,37 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
       'Interface',
       'Route',
       'Type',
-      'Project',
+      'api',
+      'service',
+      'database',
+      'util',
+      'test',
     ];
+
+    const countedTypes = new Set<string>();
 
     knownOrder.forEach((t) => {
       const cnt = nodeTypesCount[t] || nodes.filter((n) => n.type === t).length;
       if (cnt > 0) {
+        countedTypes.add(t);
         list.push({ type: t, count: cnt, color: nodeTypeColors[t] || '#00f5ff' });
       }
     });
 
     Object.entries(nodeTypesCount).forEach(([k, cnt]) => {
-      if (!knownOrder.includes(k) && cnt > 0) {
+      if (!countedTypes.has(k) && cnt > 0) {
+        countedTypes.add(k);
         list.push({ type: k, count: cnt, color: nodeTypeColors[k] || '#38bdf8' });
+      }
+    });
+
+    nodes.forEach((n) => {
+      if (!countedTypes.has(n.type)) {
+        const cnt = nodes.filter((x) => x.type === n.type).length;
+        if (cnt > 0) {
+          countedTypes.add(n.type);
+          list.push({ type: n.type, count: cnt, color: nodeTypeColors[n.type] || '#00f5ff' });
+        }
       }
     });
 
@@ -439,21 +487,29 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
       'file changes with',
       'inherits',
       'handles',
-      'raises',
-      'throws',
+      'queries',
+      'tests',
       'imports',
     ];
+
+    const countedEdges = new Set<string>();
 
     knownEdges.forEach((t) => {
       const cnt = edgeTypesCount[t] || edges.filter((e) => e.type === t).length;
       if (cnt > 0) {
+        countedEdges.add(t);
         list.push({ type: t, count: cnt });
       }
     });
 
-    Object.entries(edgeTypesCount).forEach(([k, cnt]) => {
-      if (!knownEdges.includes(k) && cnt > 0) {
-        list.push({ type: k, count: cnt });
+    edges.forEach((e) => {
+      const et = e.type || 'calls';
+      if (!countedEdges.has(et)) {
+        const cnt = edges.filter((x) => (x.type || 'calls') === et).length;
+        if (cnt > 0) {
+          countedEdges.add(et);
+          list.push({ type: et, count: cnt });
+        }
       }
     });
 
@@ -470,8 +526,8 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
             <span className="font-bold text-sm tracking-wide text-white font-mono">Codebase Memory</span>
           </div>
 
-          <div className="flex items-center space-x-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-800 text-xs">
-            <button type="button" className="px-3 py-1 rounded-md bg-[#10b981]/20 text-[#34d399] font-semibold">
+          <div className="flex items-center space-x-1 bg-slate-900/90 p-0.5 rounded-lg border border-slate-800 text-xs">
+            <button type="button" className="px-3 py-1 rounded-md bg-[#10b981]/20 text-[#34d399] font-bold">
               Graph
             </button>
             <button type="button" className="px-3 py-1 rounded-md text-slate-400 hover:text-slate-200">
@@ -488,9 +544,6 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
             <span className="truncate max-w-[280px]">
               GRAPH: <span className="text-slate-200 font-semibold">{repoName}</span>
             </span>
-            <button type="button" className="hover:text-white">
-              <X size={12} />
-            </button>
           </div>
 
           {onRefresh && (
@@ -517,7 +570,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
               <button
                 type="button"
                 onClick={() => toggleAllNodeTypes(true)}
-                className="text-[#34d399] hover:underline cursor-pointer"
+                className="text-[#34d399] hover:underline cursor-pointer font-bold"
               >
                 All
               </button>
@@ -534,7 +587,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
 
           {/* Nodes Section */}
           <div className="space-y-1.5">
-            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Nodes</div>
+            <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Nodes</div>
             <div className="flex flex-wrap gap-1.5">
               {nodeTypeEntries.map((item) => {
                 const isActive = activeNodeTypes.has(item.type);
@@ -545,13 +598,13 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
                     onClick={() => toggleNodeType(item.type)}
                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono transition cursor-pointer border ${
                       isActive
-                        ? 'bg-slate-900/90 border-slate-700 text-slate-200 shadow-2xs'
+                        ? 'bg-slate-900 border-slate-600 text-slate-100 shadow-2xs'
                         : 'bg-transparent border-slate-800/60 text-slate-500 opacity-40'
                     }`}
                   >
                     <span className="h-1.5 w-1.5 rounded-full" style={{ background: item.color }} />
                     <span>{item.type}</span>
-                    <span className="text-slate-400 font-bold">{item.count.toLocaleString()}</span>
+                    <span className="text-slate-300 font-bold">{item.count.toLocaleString()}</span>
                   </button>
                 );
               })}
@@ -560,7 +613,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
 
           {/* Edges Section */}
           <div className="space-y-1.5 pt-1">
-            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Edges</div>
+            <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Edges</div>
             <div className="flex flex-wrap gap-1.5">
               {edgeTypeEntries.map((item) => {
                 const isActive = activeEdgeTypes.has(item.type);
@@ -571,12 +624,12 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
                     onClick={() => toggleEdgeType(item.type)}
                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono transition cursor-pointer border ${
                       isActive
-                        ? 'bg-slate-900/90 border-slate-700 text-slate-300'
+                        ? 'bg-slate-900 border-slate-600 text-slate-200'
                         : 'bg-transparent border-slate-800/60 text-slate-500 opacity-40'
                     }`}
                   >
                     <span>{item.type}</span>
-                    <span className="text-slate-400 font-bold">{item.count.toLocaleString()}</span>
+                    <span className="text-slate-300 font-bold">{item.count.toLocaleString()}</span>
                   </button>
                 );
               })}
@@ -600,7 +653,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
           <div className="relative pt-1">
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search symbol, class..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-7 pr-2.5 py-1.5 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#10b981]"
@@ -611,7 +664,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
           {/* Directory Hierarchy Breakdown */}
           {Object.keys(dirCounts).length > 0 && (
             <div className="space-y-1 pt-2 border-t border-slate-800/80 font-mono text-[11px]">
-              <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Directories</div>
+              <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Directories</div>
               <div className="space-y-0.5 max-h-48 overflow-y-auto custom-scrollbar">
                 <div
                   onClick={() => setSelectedDir(null)}
@@ -620,7 +673,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
                   }`}
                 >
                   <span>. (all)</span>
-                  <span className="text-slate-500">{nodes.length}</span>
+                  <span className="text-slate-400 font-bold">{nodes.length}</span>
                 </div>
                 {Object.entries(dirCounts).map(([d, cnt]) => (
                   <div
@@ -631,7 +684,7 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
                     }`}
                   >
                     <span className="truncate max-w-[140px]">📁 {d}</span>
-                    <span className="text-slate-500">{cnt}</span>
+                    <span className="text-slate-400 font-bold">{cnt}</span>
                   </div>
                 ))}
               </div>
@@ -642,12 +695,12 @@ export const CelestialMemoryGraph: React.FC<CelestialMemoryGraphProps> = ({
         {/* 3D WebGL Viewport */}
         <div className="relative flex-1 min-h-0 h-full overflow-hidden bg-[#060a10]">
           {/* Top-left Subtitle Stats */}
-          <div className="absolute left-4 top-3 z-10 pointer-events-none font-mono text-xs text-slate-400 flex items-center space-x-2 bg-slate-950/70 px-3 py-1 rounded-md backdrop-blur-xs border border-slate-800/60">
-            <span className="text-[#34d399] font-bold">{filteredNodes.length.toLocaleString()}</span>
-            <span>nodes</span>
-            <span className="text-slate-600">/</span>
-            <span className="text-[#38bdf8] font-bold">{filteredEdges.length.toLocaleString()}</span>
-            <span>edges</span>
+          <div className="absolute left-4 top-3 z-10 pointer-events-none font-mono text-xs text-slate-300 flex items-center space-x-2 bg-slate-950/80 px-3 py-1 rounded-md backdrop-blur-xs border border-slate-800/80 shadow-md">
+            <span className="text-[#34d399] font-extrabold">{filteredNodes.length.toLocaleString()}</span>
+            <span className="text-slate-300 font-semibold">nodes</span>
+            <span className="text-slate-500">/</span>
+            <span className="text-[#38bdf8] font-extrabold">{filteredEdges.length.toLocaleString()}</span>
+            <span className="text-slate-300 font-semibold">edges</span>
           </div>
 
           {/* WebGL Canvas Mount Container */}

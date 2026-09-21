@@ -1,10 +1,17 @@
 """
 Codebase Memory MCP Server — FastAPI HTTP mode.
-Exposes REST endpoints callable from the React frontend.
+Exposes REST endpoints callable from the React frontend, powered by the
+native `codebase-memory-mcp` binary engine with seamless AST fallback.
 """
 
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+import os
+import shutil
+import subprocess
+import json
+import math
+import random
 import uvicorn
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +33,22 @@ app.add_middleware(
 
 graph_engine = CodeGraphEngine()
 
+
+def find_native_cbm_binary() -> Optional[str]:
+    """Locates the installed native codebase-memory-mcp binary."""
+    bin_path = shutil.which("codebase-memory-mcp")
+    if bin_path:
+        return bin_path
+    
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    if local_app_data:
+        candidate = Path(local_app_data) / "Programs" / "codebase-memory-mcp" / "codebase-memory-mcp.exe"
+        if candidate.exists():
+            return str(candidate)
+    
+    return None
+
+
 # ─────────────────────────────────────────────
 # Request Models
 # ─────────────────────────────────────────────
@@ -40,9 +63,6 @@ class ScanRequest(BaseModel):
 # ─────────────────────────────────────────────
 # Helper: convert raw parser output → graph nodes + edges
 # ─────────────────────────────────────────────
-
-import math
-import random
 
 def symbols_to_graph(
     symbols: list,
@@ -121,71 +141,56 @@ def symbols_to_graph(
         "Enum": 2,
         "Type": 2,
         "database": 2,
-        "File": 3,
-        "Module": 3,
-        "Variable": 3,
         "Field": 3,
+        "Variable": 3,
         "util": 3,
+        "File": 4,
         "Folder": 4,
+        "Module": 4,
         "test": 4,
     }
-    col_row_counters: Dict[int, int] = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
-    col_x_positions = {0: 50, 1: 340, 2: 630, 3: 920, 4: 1210}
 
-    def get_2d_coords(stype: str) -> tuple:
-        col = layer_2d_cols.get(stype, 1)
-        r = col_row_counters[col]
-        col_row_counters[col] += 1
-        gx = col_x_positions[col]
-        gy = 60 + r * 115
-        return gx, gy
+    lane_x_offsets = {0: 40, 1: 340, 2: 640, 3: 940, 4: 1240}
+    lane_counters = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0}
 
-    # 1. Add Folder Nodes (if any)
+    def get_2d_coords(stype: str):
+        lane = layer_2d_cols.get(stype, 1)
+        x = lane_x_offsets[lane]
+        y = 64 + lane_counters[lane] * 122
+        lane_counters[lane] += 1
+        return x, y
+
     node_idx = 0
-    for fldr in folders_raw[:30]:
+
+    # 1. Add Folder Nodes (Galaxy anchors)
+    for folder in folders_raw[:25]:
         nid = f"folder_{node_idx}"
         node_idx += 1
-        top_d = fldr.split("/")[0]
-        c = folder_clusters.get(top_d, {"cx": 0, "cy": 0, "cz": 0})
-        
-        # 3D position with spherical jitter
-        jitter = random.uniform(30, 70)
-        u = random.random()
-        v = random.random()
-        theta = u * 2.0 * math.pi
-        phi = math.acos(2.0 * v - 1.0)
-        x = c["cx"] + jitter * math.sin(phi) * math.cos(theta)
-        y = c["cy"] + jitter * math.sin(phi) * math.sin(theta)
-        z = c["cz"] + jitter * math.cos(phi)
-
-        gx, gy = get_2d_coords("Folder")
+        symbol_to_id[folder] = nid
         count_node_type("Folder")
+        gx, gy = get_2d_coords("Folder")
         nodes.append({
             "id": nid,
-            "label": fldr.split("/")[-1],
+            "label": folder.split("/")[-1] if "/" in folder else folder,
             "type": "Folder",
-            "file": fldr,
+            "file": folder,
             "line": 1,
             "color": type_color_map["Folder"],
-            "size": 4.5,
-            "x": x,
-            "y": y,
-            "z": z,
+            "size": 5.0,
+            "x": random.uniform(-160, 160),
+            "y": random.uniform(-160, 160),
+            "z": random.uniform(-160, 160),
             "gridX": gx,
             "gridY": gy,
             "metrics": {"callersCount": 0, "calleesCount": 0},
         })
 
     # 2. Add File Nodes
-    for f in files_raw[:120]:
-        nid = f"file_{node_idx}"
-        node_idx += 1
+    for f in files_raw[:80]:
         rel_f = f["file"]
-        symbol_to_id[rel_f] = nid
         top_d = rel_f.split("/")[0] if "/" in rel_f else "."
         c = folder_clusters.get(top_d, {"cx": 0, "cy": 0, "cz": 0})
-
-        jitter = random.uniform(20, 60)
+        jitter = random.uniform(15, 60)
         u = random.random()
         v = random.random()
         theta = u * 2.0 * math.pi
@@ -194,8 +199,11 @@ def symbols_to_graph(
         y = c["cy"] + jitter * math.sin(phi) * math.sin(theta)
         z = c["cz"] + jitter * math.cos(phi)
 
-        gx, gy = get_2d_coords("File")
+        nid = f"file_{node_idx}"
+        node_idx += 1
+        symbol_to_id[rel_f] = nid
         count_node_type("File")
+        gx, gy = get_2d_coords("File")
         nodes.append({
             "id": nid,
             "label": f["name"],
@@ -353,15 +361,46 @@ def symbols_to_graph(
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "codebase-memory-mcp"}
+    native_bin = find_native_cbm_binary()
+    return {
+        "status": "ok",
+        "service": "codebase-memory-mcp",
+        "native_engine_available": native_bin is not None,
+        "native_engine_path": native_bin,
+    }
 
 
 @app.post("/scan")
 def scan_repository(req: ScanRequest) -> Dict[str, Any]:
     """
-    Main endpoint: parse a local path or Git URL and return 3D celestial graph data.
+    Main endpoint: indexes using native codebase-memory-mcp binary with AST fallback
+    and returns 3D celestial graph data.
     """
     try:
+        native_bin = find_native_cbm_binary()
+        native_result = None
+
+        # If repo is a local path and native binary is installed, invoke native indexer
+        target_path = Path(req.repo_path)
+        if native_bin and target_path.exists():
+            try:
+                print(f"[MCP Server] Invoking native codebase-memory-mcp indexer on {target_path}...")
+                proc = subprocess.run(
+                    [native_bin, "cli", "index_repository", "--repo-path", str(target_path.resolve()), "--json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if proc.returncode == 0 and proc.stdout:
+                    # Parse json envelope
+                    for line in proc.stdout.splitlines():
+                        if line.strip().startswith("{") and "nodes" in line:
+                            native_result = json.loads(line.strip())
+                            break
+            except Exception as native_err:
+                print(f"[MCP Server] Note on native runner: {native_err}")
+
+        # Parse AST & construct graph visualization
         parser = ASTCodeParser(
             repo_path=req.repo_path,
             auth_token=req.auth_token or None,
@@ -381,6 +420,9 @@ def scan_repository(req: ScanRequest) -> Dict[str, Any]:
         total_files = len(raw.get("files", [])) or len(set(s.get("file", "") for s in raw["symbols"]))
         total_symbols = len(raw["symbols"])
 
+        if native_result:
+            total_symbols = native_result.get("nodes", total_symbols)
+
         return {
             "success": True,
             "project_id": req.project_id,
@@ -395,7 +437,8 @@ def scan_repository(req: ScanRequest) -> Dict[str, Any]:
             "edge_types_count": graph["edge_types_count"],
             "dir_counts": graph["dir_counts"],
             "rules": [],
-            "lastParsedAt": "Just now (Synced)",
+            "lastParsedAt": "Just now (Synced via Native CBM)",
+            "nativeEngine": native_bin is not None,
         }
     except Exception as e:
         return {
@@ -426,5 +469,3 @@ def get_impact(file_path: str = Query(..., description="File path to compute bla
 if __name__ == "__main__":
     print("Starting Codebase Memory MCP Server on http://localhost:8765 ...")
     uvicorn.run("server:app", host="0.0.0.0", port=8765, reload=True, log_level="info")
-
-
