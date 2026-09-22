@@ -7,13 +7,14 @@ native `codebase-memory-mcp` binary engine with seamless AST fallback.
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 import os
+import re
 import shutil
 import subprocess
 import json
 import math
 import random
 import uvicorn
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -36,10 +37,22 @@ graph_engine = CodeGraphEngine()
 
 def find_native_cbm_binary() -> Optional[str]:
     """Locates the installed native codebase-memory-mcp binary."""
-    bin_path = shutil.which("codebase-memory-mcp")
+    # 1. Direct PATH check
+    bin_path = shutil.which("codebase-memory-mcp") or shutil.which("codebase-memory-mcp.cmd") or shutil.which("codebase-memory-mcp.exe")
     if bin_path:
         return bin_path
     
+    # 2. Windows Global NPM Directory check
+    app_data = os.environ.get("APPDATA", "")
+    if app_data:
+        npm_candidate = Path(app_data) / "npm" / "codebase-memory-mcp.cmd"
+        if npm_candidate.exists():
+            return str(npm_candidate)
+        npm_ps1 = Path(app_data) / "npm" / "codebase-memory-mcp.ps1"
+        if npm_ps1.exists():
+            return str(npm_ps1)
+
+    # 3. Windows LocalAppData Programs check
     local_app_data = os.environ.get("LOCALAPPDATA", "")
     if local_app_data:
         candidate = Path(local_app_data) / "Programs" / "codebase-memory-mcp" / "codebase-memory-mcp.exe"
@@ -47,6 +60,52 @@ def find_native_cbm_binary() -> Optional[str]:
             return str(candidate)
     
     return None
+
+
+def resolve_repo_path(path_or_url: str, auth_token: Optional[str] = None, branch: str = "main") -> Path:
+    """Resolves local directory or clones remote Git repo to local cache directory for native indexing."""
+    p = Path(path_or_url)
+    if p.exists():
+        return p
+
+    clean_url = path_or_url.strip()
+    if clean_url.startswith("http://") or clean_url.startswith("https://") or clean_url.startswith("git@"):
+        # Make a safe folder name from URL
+        clean_name = clean_url.replace("https://", "").replace("http://", "").replace("git@", "").replace(".git", "")
+        safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", clean_name)
+        cache_dir = Path.home() / ".codegraph_cache" / safe_name
+        
+        clone_url = clean_url
+        if auth_token and "github.com" in clean_url and "https://" in clean_url:
+            clone_url = clean_url.replace("https://", f"https://{auth_token}@")
+
+        if cache_dir.exists() and (cache_dir / ".git").exists():
+            try:
+                print(f"[ENGINE] [GIT] Updating existing cached repo at {cache_dir}...")
+                subprocess.run(["git", "-C", str(cache_dir), "pull"], capture_output=True, timeout=15)
+                return cache_dir
+            except Exception:
+                pass
+            return cache_dir
+        
+        # Clone fresh
+        cache_dir.parent.mkdir(parents=True, exist_ok=True)
+        if cache_dir.exists():
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            
+        print(f"[ENGINE] [GIT] Cloning remote repository {clean_url} into local cache {cache_dir}...")
+        try:
+            res = subprocess.run(["git", "clone", "--depth", "1", "--branch", branch, clone_url, str(cache_dir)], capture_output=True, text=True, timeout=60)
+            if res.returncode != 0:
+                # Retry without explicit branch (default branch)
+                subprocess.run(["git", "clone", "--depth", "1", clone_url, str(cache_dir)], capture_output=True, text=True, timeout=60)
+            if cache_dir.exists():
+                print(f"[ENGINE] [GIT] Successfully cloned to {cache_dir}")
+                return cache_dir
+        except Exception as clone_err:
+            print(f"[ENGINE] [WARN] Git clone error: {clone_err}")
+
+    return p
 
 
 # ─────────────────────────────────────────────
@@ -379,30 +438,63 @@ def scan_repository(req: ScanRequest) -> Dict[str, Any]:
     try:
         native_bin = find_native_cbm_binary()
         native_result = None
+        native_succeeded = False
 
-        # If repo is a local path and native binary is installed, invoke native indexer
-        target_path = Path(req.repo_path)
+        # Resolve local directory or clone remote Git repo into local cache
+        target_path = resolve_repo_path(req.repo_path, req.auth_token, req.branch)
+
         if native_bin and target_path.exists():
             try:
-                print(f"[MCP Server] Invoking native codebase-memory-mcp indexer on {target_path}...")
+                print(f"[ENGINE] [OK] Native binary found: {native_bin}")
+                print(f"[ENGINE] [RUN] Running: codebase-memory-mcp cli --json index_repository on {target_path}")
                 proc = subprocess.run(
-                    [native_bin, "cli", "index_repository", "--repo-path", str(target_path.resolve()), "--json"],
+                    [native_bin, "cli", "--json", "index_repository", "--repo-path", str(target_path.resolve()), "--mode", "fast"],
                     capture_output=True,
                     text=True,
-                    timeout=30,
+                    timeout=60,
                 )
                 if proc.returncode == 0 and proc.stdout:
-                    # Parse json envelope
+                    # Parse json envelope from output lines
                     for line in proc.stdout.splitlines():
-                        if line.strip().startswith("{") and "nodes" in line:
-                            native_result = json.loads(line.strip())
-                            break
+                        trimmed = line.strip()
+                        if trimmed.startswith("{"):
+                            try:
+                                envelope = json.loads(trimmed)
+                                if "structuredContent" in envelope:
+                                    native_result = envelope["structuredContent"]
+                                elif "content" in envelope and len(envelope["content"]) > 0:
+                                    text_val = envelope["content"][0].get("text", "")
+                                    if text_val.startswith("{"):
+                                        native_result = json.loads(text_val)
+                                    else:
+                                        native_result = envelope
+                                elif "nodes" in envelope:
+                                    native_result = envelope
+
+                                if native_result and ("nodes" in native_result or native_result.get("status") == "indexed"):
+                                    native_succeeded = True
+                                    print(f"[ENGINE] [OK] Native binary SUCCESS - nodes={native_result.get('nodes','?')}, edges={native_result.get('edges','?')}")
+                                    break
+                            except Exception:
+                                pass
+
+                    if not native_succeeded:
+                        print(f"[ENGINE] [WARN] Native binary ran but returned no parseable JSON")
+                else:
+                    print(f"[ENGINE] [WARN] Native binary exited with code {proc.returncode}")
+                    if proc.stderr:
+                        print(f"[ENGINE] stderr: {proc.stderr[:200]}")
             except Exception as native_err:
-                print(f"[MCP Server] Note on native runner: {native_err}")
+                print(f"[ENGINE] [WARN] Native binary error: {native_err}")
+        else:
+            if not native_bin:
+                print(f"[ENGINE] [INFO] Native binary NOT found - using Python AST parser only")
+            elif not target_path.exists():
+                print(f"[ENGINE] [INFO] Path does not exist locally - using Python AST parser")
 
         # Parse AST & construct graph visualization
         parser = ASTCodeParser(
-            repo_path=req.repo_path,
+            repo_path=str(target_path),
             auth_token=req.auth_token or None,
             branch=req.branch,
         )
@@ -420,8 +512,22 @@ def scan_repository(req: ScanRequest) -> Dict[str, Any]:
         total_files = len(raw.get("files", [])) or len(set(s.get("file", "") for s in raw["symbols"]))
         total_symbols = len(raw["symbols"])
 
-        if native_result:
+        # native_result provides verified count from native tree-sitter indexer
+        if native_result and "nodes" in native_result:
             total_symbols = native_result.get("nodes", total_symbols)
+
+        # Determine which engine did the work
+        if native_succeeded:
+            engine_used = "native"
+            engine_label = "Native Binary (codebase-memory-mcp v0.11.0)"
+        elif native_bin:
+            engine_used = "python"
+            engine_label = "Python AST Parser (native binary ran into issue)"
+        else:
+            engine_used = "python"
+            engine_label = "Python AST Parser (native binary not installed)"
+
+        print(f"[ENGINE] [DATA] Final engine_used='{engine_used}' | files={total_files} | symbols={total_symbols} | nodes={len(graph['nodes'])} | edges={len(graph['edges'])}")
 
         return {
             "success": True,
@@ -437,8 +543,11 @@ def scan_repository(req: ScanRequest) -> Dict[str, Any]:
             "edge_types_count": graph["edge_types_count"],
             "dir_counts": graph["dir_counts"],
             "rules": [],
-            "lastParsedAt": "Just now (Synced via Native CBM)",
+            "lastParsedAt": "Just now (Synced)",
             "nativeEngine": native_bin is not None,
+            "nativeSucceeded": native_succeeded,
+            "engineUsed": engine_used,
+            "engineLabel": engine_label,
         }
     except Exception as e:
         return {
@@ -462,6 +571,37 @@ def get_impact(file_path: str = Query(..., description="File path to compute bla
     return graph_engine.compute_blast_radius(file_path)
 
 
+class ToolInvokeRequest(BaseModel):
+    tool: str
+    args: Dict[str, Any] = {}
+
+
+@app.post("/mcp/tool")
+def invoke_mcp_tool(req: ToolInvokeRequest):
+    """Executes an MCP tool directly via the native codebase-memory-mcp binary."""
+    native_bin = find_native_cbm_binary()
+    if not native_bin:
+        raise HTTPException(status_code=503, detail="Native binary codebase-memory-mcp is not installed")
+    
+    cmd = [native_bin, "cli", "--json", req.tool]
+    for k, v in req.args.items():
+        cmd.extend([f"--{k}", str(v)])
+    
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        for line in proc.stdout.splitlines():
+            trimmed = line.strip()
+            if trimmed.startswith("{"):
+                try:
+                    envelope = json.loads(trimmed)
+                    return {"success": True, "data": envelope}
+                except Exception:
+                    pass
+        return {"success": proc.returncode == 0, "raw": proc.stdout, "stderr": proc.stderr}
+    except Exception as err:
+        return {"success": False, "error": str(err)}
+
+
 # ─────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────
@@ -469,3 +609,4 @@ def get_impact(file_path: str = Query(..., description="File path to compute bla
 if __name__ == "__main__":
     print("Starting Codebase Memory MCP Server on http://localhost:8765 ...")
     uvicorn.run("server:app", host="0.0.0.0", port=8765, reload=True, log_level="info")
+

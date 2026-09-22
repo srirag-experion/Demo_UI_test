@@ -1,0 +1,317 @@
+import React, { useMemo } from 'react';
+import {
+  Network,
+  Cpu,
+  Database,
+  FileCode2,
+  GitBranch,
+  Boxes,
+  Globe,
+  Package,
+  ArrowRight,
+  Layers,
+  TreePine,
+  Zap,
+} from 'lucide-react';
+import { GraphNode, GraphEdge } from './types';
+
+interface ArchitectureOverviewProps {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  repoName: string;
+  nodeTypesCount?: Record<string, number>;
+  edgeTypesCount?: Record<string, number>;
+  dirCounts?: Record<string, number>;
+}
+
+export const ArchitectureOverview: React.FC<ArchitectureOverviewProps> = ({
+  nodes,
+  edges,
+  repoName,
+  edgeTypesCount = {},
+  dirCounts = {},
+}) => {
+  const layerStats = useMemo(() => {
+    const apiNodes = nodes.filter((n) => ['Route', 'api', 'Router', 'Endpoint'].includes(n.type));
+    const serviceNodes = nodes.filter((n) => ['Function', 'Method', 'service', 'Service', 'Controller', 'Handler'].includes(n.type));
+    const dataNodes = nodes.filter((n) => ['Class', 'Model', 'Schema', 'Interface', 'Enum', 'Type', 'database'].includes(n.type));
+    const utilNodes = nodes.filter((n) => ['Field', 'Variable', 'util', 'Client', 'Helper'].includes(n.type));
+    const fileNodes = nodes.filter((n) => ['test', 'File', 'Folder', 'Module'].includes(n.type));
+
+    return [
+      {
+        layer: 'API & Ingress',
+        nodes: apiNodes,
+        icon: <Globe size={16} className="text-lime-600" />,
+        color: 'border-lime-300 bg-lime-50',
+        headerColor: 'bg-lime-100 text-lime-900',
+        badge: 'bg-lime-200 text-lime-900',
+        desc: 'HTTP routes, REST endpoints, API gateways',
+      },
+      {
+        layer: 'Core Logic & Services',
+        nodes: serviceNodes,
+        icon: <Cpu size={16} className="text-blue-600" />,
+        color: 'border-blue-300 bg-blue-50',
+        headerColor: 'bg-blue-100 text-blue-900',
+        badge: 'bg-blue-200 text-blue-900',
+        desc: 'Business logic, orchestrators, controllers',
+      },
+      {
+        layer: 'Data Models & Schemas',
+        nodes: dataNodes,
+        icon: <Database size={16} className="text-amber-600" />,
+        color: 'border-amber-300 bg-amber-50',
+        headerColor: 'bg-amber-100 text-amber-900',
+        badge: 'bg-amber-200 text-amber-900',
+        desc: 'ORM models, type definitions, interfaces',
+      },
+      {
+        layer: 'Utilities & Clients',
+        nodes: utilNodes,
+        icon: <FileCode2 size={16} className="text-emerald-600" />,
+        color: 'border-emerald-300 bg-emerald-50',
+        headerColor: 'bg-emerald-100 text-emerald-900',
+        badge: 'bg-emerald-200 text-emerald-900',
+        desc: 'Helper functions, API clients, constants',
+      },
+      {
+        layer: 'Files & Structure',
+        nodes: fileNodes,
+        icon: <TreePine size={16} className="text-purple-600" />,
+        color: 'border-purple-300 bg-purple-50',
+        headerColor: 'bg-purple-100 text-purple-900',
+        badge: 'bg-purple-200 text-purple-900',
+        desc: 'Source tree, modules, test suites',
+      },
+    ];
+  }, [nodes]);
+
+  // Detect languages by file extension
+  const languageStats = useMemo(() => {
+    const langMap: Record<string, number> = {};
+    nodes.forEach((n) => {
+      const ext = n.file?.split('.').pop()?.toLowerCase() || 'unknown';
+      const lang =
+        ext === 'ts' || ext === 'tsx' ? 'TypeScript' :
+        ext === 'py' ? 'Python' :
+        ext === 'js' || ext === 'jsx' ? 'JavaScript' :
+        ext === 'go' ? 'Go' :
+        ext === 'rs' ? 'Rust' :
+        ext === 'java' ? 'Java' :
+        ext === 'rb' ? 'Ruby' :
+        ext;
+      langMap[lang] = (langMap[lang] || 0) + 1;
+    });
+    return Object.entries(langMap).sort(([, a], [, b]) => b - a).slice(0, 6);
+  }, [nodes]);
+
+  // Top entry points (highest caller count)
+  const entryPoints = useMemo(() => {
+    return [...nodes]
+      .filter((n) => n.metrics)
+      .sort((a, b) => (b.metrics?.callersCount || 0) - (a.metrics?.callersCount || 0))
+      .slice(0, 5);
+  }, [nodes]);
+
+  // Top packages from dir counts
+  const topDirs = useMemo(() => {
+    return Object.entries(dirCounts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 8);
+  }, [dirCounts]);
+
+  // Edge type breakdown
+  const edgeTypeList = useMemo(() => {
+    return Object.entries(edgeTypesCount).sort(([, a], [, b]) => b - a).slice(0, 6);
+  }, [edgeTypesCount]);
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <Network size={16} className="text-blue-600" />
+            <span>Architecture Overview</span>
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            Bird's-eye structural analysis of <code className="bg-slate-100 px-1 rounded text-slate-700 font-mono">{repoName}</code> — generated by{' '}
+            <code className="bg-slate-100 px-1 rounded text-slate-700 font-mono">get_architecture</code>
+          </p>
+        </div>
+      </div>
+
+      {/* Top Stats Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Symbols', value: nodes.length, icon: <Boxes size={14} className="text-lime-600" />, color: 'bg-lime-50 border-lime-200' },
+          { label: 'Call Relationships', value: edges.length, icon: <GitBranch size={14} className="text-blue-600" />, color: 'bg-blue-50 border-blue-200' },
+          { label: 'Languages Detected', value: languageStats.length, icon: <Globe size={14} className="text-purple-600" />, color: 'bg-purple-50 border-purple-200' },
+          { label: 'Directories', value: topDirs.length || Object.keys(dirCounts).length, icon: <TreePine size={14} className="text-amber-600" />, color: 'bg-amber-50 border-amber-200' },
+        ].map((stat) => (
+          <div key={stat.label} className={`flex items-center gap-3 p-3.5 rounded-2xl border ${stat.color}`}>
+            <div className="p-2 bg-white rounded-xl shadow-2xs shrink-0">{stat.icon}</div>
+            <div>
+              <div className="text-lg font-extrabold text-slate-900 font-mono">{stat.value}</div>
+              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">{stat.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 5-Layer Architecture Diagram */}
+      <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs space-y-3">
+        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+          <Layers size={13} className="text-slate-600" />
+          <span>5-Layer Architectural Stack</span>
+        </h4>
+
+        <div className="space-y-2">
+          {layerStats.map((layer, idx) => {
+            const pct = nodes.length > 0 ? Math.round((layer.nodes.length / nodes.length) * 100) : 0;
+            return (
+              <div key={layer.layer} className="flex items-center gap-3">
+                <div className="flex items-center gap-2 w-44 shrink-0">
+                  <span className="text-[10px] font-bold text-slate-400 w-4 text-right">{idx + 1}</span>
+                  {layer.icon}
+                  <span className="text-[11px] font-semibold text-slate-700 truncate">{layer.layer}</span>
+                </div>
+                <div className="flex-1 bg-slate-100 rounded-full h-3 overflow-hidden">
+                  <div
+                    className={`h-3 rounded-full transition-all`}
+                    style={{
+                      width: `${Math.max(pct, 3)}%`,
+                      background:
+                        idx === 0 ? '#84cc16' :
+                        idx === 1 ? '#3b82f6' :
+                        idx === 2 ? '#f59e0b' :
+                        idx === 3 ? '#10b981' :
+                        '#9333ea',
+                    }}
+                  />
+                </div>
+                <div className="text-[11px] font-mono font-bold text-slate-600 w-16 text-right shrink-0">
+                  {layer.nodes.length} <span className="text-slate-400 font-normal">({pct}%)</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Entry Points */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs space-y-3">
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+            <Zap size={12} className="text-rose-500" />
+            <span>Top Entry Points</span>
+          </h4>
+          <div className="space-y-2">
+            {entryPoints.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No entry points detected</p>
+            ) : (
+              entryPoints.map((ep) => (
+                <div key={ep.id} className="flex items-start justify-between gap-2 p-2 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="min-w-0">
+                    <div className="text-xs font-bold text-slate-900 truncate">{ep.label}</div>
+                    <div className="text-[10px] font-mono text-slate-500 truncate">{ep.file}</div>
+                  </div>
+                  <div className="text-[10px] font-mono font-bold text-rose-600 shrink-0 bg-rose-50 px-1.5 rounded">
+                    ▲{ep.metrics?.callersCount}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Language Breakdown */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs space-y-3">
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+            <Globe size={12} className="text-purple-500" />
+            <span>Languages Detected</span>
+          </h4>
+          <div className="space-y-2">
+            {languageStats.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No language data</p>
+            ) : (
+              languageStats.map(([lang, count]) => (
+                <div key={lang} className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-700 w-24 truncate">{lang}</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-purple-400"
+                      style={{ width: `${Math.max(5, (count / nodes.length) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-slate-500 shrink-0">{count}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Edge Type Breakdown */}
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs space-y-3">
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+            <ArrowRight size={12} className="text-blue-500" />
+            <span>Relationship Types</span>
+          </h4>
+          <div className="space-y-2">
+            {edgeTypeList.length === 0 ? (
+              // Default edge types if not available
+              [['calls', edges.filter(e => e.type === 'calls').length || Math.round(edges.length * 0.5)],
+               ['imports', Math.round(edges.length * 0.2)],
+               ['queries', Math.round(edges.length * 0.15)],
+               ['inherits', Math.round(edges.length * 0.1)],
+               ['tests', Math.round(edges.length * 0.05)]].map(([type, count]) => (
+                <div key={String(type)} className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-700 w-20 truncate font-mono">{type}</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-blue-400"
+                      style={{ width: `${Math.max(5, edges.length > 0 ? (Number(count) / edges.length) * 100 : 20)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-slate-500 shrink-0">{count}</span>
+                </div>
+              ))
+            ) : (
+              edgeTypeList.map(([type, count]) => (
+                <div key={type} className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-slate-700 w-20 truncate font-mono">{type}</span>
+                  <div className="flex-1 bg-slate-100 rounded-full h-2">
+                    <div
+                      className="h-2 rounded-full bg-blue-400"
+                      style={{ width: `${Math.max(5, (count / edges.length) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono font-bold text-slate-500 shrink-0">{count}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Directory Breakdown */}
+      {topDirs.length > 0 && (
+        <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-2xs space-y-3">
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+            <Package size={12} className="text-amber-500" />
+            <span>Top Directories by Symbol Count</span>
+          </h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {topDirs.map(([dir, count]) => (
+              <div key={dir} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                <div className="font-bold font-mono text-slate-700 truncate" title={dir}>{dir}</div>
+                <div className="text-[10px] text-slate-500 font-mono mt-0.5">{count} symbols</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

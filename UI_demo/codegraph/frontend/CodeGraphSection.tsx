@@ -1,5 +1,24 @@
 import React, { useState } from 'react';
-import { Database, Zap, BookOpen, RefreshCw, FolderGit2, AlertTriangle, Sparkles, LayoutGrid } from 'lucide-react';
+import {
+  Database,
+  Zap,
+  BookOpen,
+  RefreshCw,
+  FolderGit2,
+  AlertTriangle,
+  Sparkles,
+  LayoutGrid,
+  Cpu,
+  Network,
+  Terminal,
+  Activity,
+  GitBranch,
+  CheckCircle2,
+  Clock,
+  HardDrive,
+  Layers,
+  ChevronRight,
+} from 'lucide-react';
 import { useConfig } from '../../src/context/ConfigContext';
 import { PROJECT_CODEBASE_MEMORIES } from './projectMemories';
 import { ProjectCodebaseMemory } from './types';
@@ -8,10 +27,19 @@ import { GraphCanvas } from './GraphCanvas';
 import { SchemaViewer } from './SchemaViewer';
 import { ImpactRadiusViewer } from './ImpactRadiusViewer';
 import { MemoryRulesPanel } from './MemoryRulesPanel';
+import { MCPToolsPanel } from './MCPToolsPanel';
+import { ArchitectureOverview } from './ArchitectureOverview';
 
 const MCP_API_URL = 'http://localhost:8765';
 
-type ViewMode = 'galaxy3d' | 'graph2d' | 'schema' | 'impact' | 'rules';
+type ViewMode =
+  | 'galaxy3d'
+  | 'architecture'
+  | 'graph2d'
+  | 'schema'
+  | 'impact'
+  | 'mcp_tools'
+  | 'rules';
 
 export const CodeGraphSection: React.FC = () => {
   const { activeProjectId, showToast } = useConfig();
@@ -19,7 +47,6 @@ export const CodeGraphSection: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
 
-  // Empty memory for unseeded state
   const emptyMemory = (): ProjectCodebaseMemory => ({
     projectId: activeProjectId,
     repoUrl: '',
@@ -33,7 +60,6 @@ export const CodeGraphSection: React.FC = () => {
     rules: [],
   });
 
-  // Seed from demo data for known projects; empty for new ones
   const seedMemory = (projId: string): ProjectCodebaseMemory =>
     PROJECT_CODEBASE_MEMORIES[projId] ?? emptyMemory();
 
@@ -52,7 +78,6 @@ export const CodeGraphSection: React.FC = () => {
   const [branch, setBranch] = useState('main');
   const [showAuthSettings, setShowAuthSettings] = useState(false);
 
-  // Switch project → reset view
   React.useEffect(() => {
     const mem = seedMemory(activeProjectId);
     setCurrentRepoUrl(mem.repoUrl);
@@ -63,7 +88,6 @@ export const CodeGraphSection: React.FC = () => {
 
   const memory = scannedMemory;
 
-  // ── Real scan: calls Python FastAPI server ──────────────────────
   const handleRefresh = async () => {
     if (!currentRepoUrl || currentRepoUrl.trim() === '') {
       showToast('error', 'No Repository Entered', 'Please enter a Git URL or local folder path before scanning.');
@@ -73,11 +97,9 @@ export const CodeGraphSection: React.FC = () => {
     setBackendError(null);
 
     try {
-      // Check if the Python server is reachable first
       const health = await fetch(`${MCP_API_URL}/health`, { signal: AbortSignal.timeout(3000) });
       if (!health.ok) throw new Error('MCP server not reachable');
 
-      // Call the real AST scan endpoint
       const res = await fetch(`${MCP_API_URL}/scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -121,10 +143,11 @@ export const CodeGraphSection: React.FC = () => {
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      const isOffline = msg.includes('fetch') || msg.includes('reachable') || msg.includes('timeout') || msg.includes('Failed');
+      const isOffline =
+        msg.includes('fetch') || msg.includes('reachable') || msg.includes('timeout') || msg.includes('Failed');
       if (isOffline) {
-        setBackendError('Python MCP server is not running. Start it in Terminal 2 with: python server.py');
-        showToast('error', 'MCP Server Offline', 'Run: python server.py in codegraph/mcp_server/ to enable live scanning.');
+        setBackendError('Python MCP server is not running. Start it with: python server.py');
+        showToast('error', 'MCP Server Offline', 'Run: python server.py in codegraph/mcp_server/');
       } else {
         setBackendError(msg);
         showToast('error', 'Scan Failed', msg);
@@ -140,23 +163,79 @@ export const CodeGraphSection: React.FC = () => {
     return parts[parts.length - 1]?.replace('.git', '') || activeProjectId;
   };
 
+  const tabDefs: Array<{
+    id: ViewMode;
+    label: string;
+    icon: React.ReactNode;
+    iconActive: string;
+    badge?: string | number;
+  }> = [
+    {
+      id: 'galaxy3d',
+      label: '3D Celestial Galaxy',
+      icon: <Sparkles size={14} />,
+      iconActive: 'text-cyan-500',
+    },
+    {
+      id: 'architecture',
+      label: 'Architecture Overview',
+      icon: <Network size={14} />,
+      iconActive: 'text-blue-500',
+    },
+    {
+      id: 'graph2d',
+      label: '2D Multi-Lane Canvases',
+      icon: <LayoutGrid size={14} />,
+      iconActive: 'text-lime-600',
+    },
+    {
+      id: 'schema',
+      label: 'Schemas & Models',
+      icon: <Database size={14} />,
+      iconActive: 'text-amber-500',
+      badge: memory.schemas.length,
+    },
+    {
+      id: 'impact',
+      label: 'Impact Blast-Radius',
+      icon: <Zap size={14} />,
+      iconActive: 'text-rose-500',
+    },
+    {
+      id: 'mcp_tools',
+      label: 'MCP Tools & CLI',
+      icon: <Terminal size={14} />,
+      iconActive: 'text-slate-400',
+      badge: '17',
+    },
+    {
+      id: 'rules',
+      label: 'Architectural Rules',
+      icon: <BookOpen size={14} />,
+      iconActive: 'text-blue-500',
+      badge: memory.rules.length,
+    },
+  ];
+
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Title & Project Bar */}
+    <div className="space-y-5 animate-fade-in">
+      {/* ── Page Header ────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Codebase Memory & Graph</h1>
             <span className="text-xs font-mono font-bold px-2.5 py-0.5 bg-[#edf8c7] text-slate-800 rounded-full border border-[#94d320]/50">
               {activeProjectId}
             </span>
+            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-slate-900 text-lime-400 rounded-full border border-slate-700">
+              codebase-memory-mcp v0.11.0
+            </span>
           </div>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            3D Force-Directed Celestial Knowledge Sphere, caller-callee chains, schemas, and learned memory
+            RAM-first AST indexer · 66+ language Tree-sitter grammars · 17 MCP tools · Persistent knowledge graph
           </p>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex items-center space-x-2 shrink-0">
           <button
             type="button"
@@ -170,15 +249,77 @@ export const CodeGraphSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Project Repository Input & Status Header Card */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-4">
+      {/* ── Capability Quick-Stats Banner ────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
+        {[
+          {
+            label: 'Files Indexed',
+            value: memory.totalFiles || 0,
+            icon: <HardDrive size={13} className="text-slate-500" />,
+            color: 'text-slate-900',
+          },
+          {
+            label: 'Nodes / Symbols',
+            value: memory.nodes.length || memory.totalSymbols || 0,
+            icon: <Layers size={13} className="text-lime-600" />,
+            color: 'text-lime-700',
+          },
+          {
+            label: 'Edges',
+            value: memory.edges.length || 0,
+            icon: <GitBranch size={13} className="text-blue-600" />,
+            color: 'text-blue-700',
+          },
+          {
+            label: 'Schemas',
+            value: memory.schemas.length || 0,
+            icon: <Database size={13} className="text-amber-600" />,
+            color: 'text-amber-700',
+          },
+          {
+            label: 'Rules',
+            value: memory.rules.length || 0,
+            icon: <BookOpen size={13} className="text-purple-600" />,
+            color: 'text-purple-700',
+          },
+          {
+            label: 'MCP Tools',
+            value: 17,
+            icon: <Terminal size={13} className="text-slate-600" />,
+            color: 'text-slate-700',
+          },
+          {
+            label: 'Last Scanned',
+            value: memory.lastParsedAt?.replace(' (Synced)', '') || '—',
+            icon: <Clock size={13} className="text-slate-400" />,
+            color: 'text-slate-600',
+            isText: true,
+          },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="bg-white border border-slate-200/80 rounded-xl p-3 shadow-2xs flex flex-col justify-between gap-1.5"
+          >
+            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              {stat.icon}
+              <span>{stat.label}</span>
+            </div>
+            <div className={`text-sm font-extrabold font-mono truncate ${stat.color}`}>
+              {String(stat.value)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Repo Input Card ──────────────────────────────────────────── */}
+      <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs space-y-3">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center space-x-3 flex-1">
             <div className="p-2.5 bg-[#edf8c7] rounded-xl text-[#65a30d] shrink-0">
               <FolderGit2 size={18} />
             </div>
             <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
                   <span>Target Repository / Codebase</span>
                   <span className="text-[10px] text-slate-400 font-normal">({memory.lastParsedAt})</span>
@@ -202,7 +343,7 @@ export const CodeGraphSection: React.FC = () => {
                       onClick={() => setShowAuthSettings(!showAuthSettings)}
                       className="text-[11px] font-semibold text-[#65a30d] hover:underline cursor-pointer"
                     >
-                      {showAuthSettings ? 'Hide Credentials ▲' : 'Configure Auth ▼'}
+                      {showAuthSettings ? 'Hide Auth ▲' : 'Configure Auth ▼'}
                     </button>
                   )}
                 </div>
@@ -217,13 +358,12 @@ export const CodeGraphSection: React.FC = () => {
                     placeholder={
                       isPrivate
                         ? 'e.g. https://github.com/my-org/private-repo.git or git@github.com:org/repo.git'
-                        : 'e.g. https://github.com/org/repo or C:/path/to/repo'
+                        : 'e.g. https://github.com/org/repo or C:/path/to/local/repo'
                     }
                     className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs font-mono font-medium rounded-lg px-3 py-1.5 focus:outline-none focus:bg-white focus:ring-2 focus:ring-lime-400/40 focus:border-lime-500"
                   />
                 </div>
 
-                {/* Branch Input */}
                 <div className="w-28 shrink-0">
                   <input
                     type="text"
@@ -247,19 +387,25 @@ export const CodeGraphSection: React.FC = () => {
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="flex items-center space-x-4 shrink-0 text-xs border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5">
-            <div>
-              <div className="text-[10px] uppercase font-bold text-slate-400">Files Indexed</div>
-              <div className="text-sm font-extrabold text-slate-800 font-mono">{memory.totalFiles}</div>
+          {/* Engine Status Badge */}
+          <div className="shrink-0 flex flex-col items-center gap-1 border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <Activity size={11} className="text-lime-500" />
+              <span>Engine Status</span>
             </div>
-            <div>
-              <div className="text-[10px] uppercase font-bold text-slate-400">Nodes / Symbols</div>
-              <div className="text-sm font-extrabold text-[#65a30d] font-mono">{memory.nodes.length || memory.totalSymbols}</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase font-bold text-slate-400">Edges</div>
-              <div className="text-sm font-extrabold text-slate-800 font-mono">{memory.edges.length}</div>
+            <div className="flex flex-col gap-1 text-[10px] font-mono text-slate-600">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 size={11} className="text-lime-500" />
+                <span>Tree-sitter: 66+ langs</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 size={11} className="text-lime-500" />
+                <span>LZ4 RAM pipeline</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 size={11} className="text-lime-500" />
+                <span>SQLite knowledge graph</span>
+              </div>
             </div>
           </div>
         </div>
@@ -268,9 +414,7 @@ export const CodeGraphSection: React.FC = () => {
         {isPrivate && showAuthSettings && (
           <div className="p-4 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-3 mt-2 animate-fade-in">
             <div className="flex items-center justify-between pb-2 border-b border-slate-200/60">
-              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <span>🔐 Private Repository Authentication Credentials</span>
-              </span>
+              <span className="text-xs font-bold text-slate-800">🔐 Private Repository Authentication</span>
               <div className="flex items-center space-x-2 text-xs">
                 {(['pat', 'ssh', 'app'] as const).map((type) => (
                   <button
@@ -283,9 +427,9 @@ export const CodeGraphSection: React.FC = () => {
                         : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    {type === 'pat' && 'Personal Access Token (PAT)'}
-                    {type === 'ssh' && 'SSH Private Key'}
-                    {type === 'app' && 'GitHub App / OAuth'}
+                    {type === 'pat' && 'PAT Token'}
+                    {type === 'ssh' && 'SSH Key'}
+                    {type === 'app' && 'GitHub App'}
                   </button>
                 ))}
               </div>
@@ -294,18 +438,16 @@ export const CodeGraphSection: React.FC = () => {
             {authType === 'pat' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    GitHub / GitLab Personal Access Token (PAT)
-                  </label>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">Personal Access Token (PAT)</label>
                   <input
                     type="password"
                     value={patToken}
                     onChange={(e) => setPatToken(e.target.value)}
-                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx or glpat-xxxxxxxxxxxx"
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
                     className="w-full bg-white border border-slate-200 text-slate-800 text-xs font-mono rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-lime-400/40 focus:border-lime-500 focus:outline-none"
                   />
                   <span className="text-[10px] text-slate-400 mt-1 block">
-                    Required scopes: <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">repo (read:repo)</code>
+                    Required scopes: <code className="bg-slate-100 px-1 rounded text-slate-700">repo (read:repo)</code>
                   </span>
                 </div>
                 <div>
@@ -315,7 +457,6 @@ export const CodeGraphSection: React.FC = () => {
                     placeholder="e.g. octocat or my-org"
                     className="w-full bg-white border border-slate-200 text-slate-800 text-xs font-mono rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-lime-400/40 focus:border-lime-500 focus:outline-none"
                   />
-                  <span className="text-[10px] text-slate-400 mt-1 block">Used for basic auth / token header.</span>
                 </div>
               </div>
             )}
@@ -323,75 +464,76 @@ export const CodeGraphSection: React.FC = () => {
         )}
       </div>
 
-      {/* View Mode Navigation Tabs */}
-      <div className="flex items-center space-x-1.5 bg-slate-200/70 p-1 rounded-xl w-fit text-xs select-none">
-        <button
-          type="button"
-          onClick={() => setViewMode('galaxy3d')}
-          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
-            viewMode === 'galaxy3d'
-              ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-          }`}
-        >
-          <Sparkles size={14} className={viewMode === 'galaxy3d' ? 'text-cyan-500' : 'text-slate-400'} />
-          <span>3D Celestial Galaxy</span>
-        </button>
+      {/* ── Capabilities Feature Ribbon ─────────────────────────────── */}
+      {!hasScanned && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            {
+              icon: <Cpu size={18} className="text-lime-600" />,
+              bg: 'bg-lime-50 border-lime-200',
+              title: 'Lightning AST Indexing',
+              desc: 'RAM-first LZ4 pipeline indexes the Linux kernel in ~3 min',
+            },
+            {
+              icon: <Network size={18} className="text-blue-600" />,
+              bg: 'bg-blue-50 border-blue-200',
+              title: '66+ Language Parsing',
+              desc: 'Tree-sitter grammars for TypeScript, Python, Go, Rust, Java and 60+ more',
+            },
+            {
+              icon: <Database size={18} className="text-amber-600" />,
+              bg: 'bg-amber-50 border-amber-200',
+              title: 'Persistent Knowledge Graph',
+              desc: 'SQLite graph survives IDE restarts and context compaction',
+            },
+            {
+              icon: <Sparkles size={18} className="text-purple-600" />,
+              bg: 'bg-purple-50 border-purple-200',
+              title: '~120x Token Efficiency',
+              desc: 'LLMs query symbol outlines, not 50 full files. 10x faster AI responses',
+            },
+          ].map((feat) => (
+            <div key={feat.title} className={`border rounded-2xl p-4 space-y-2 ${feat.bg}`}>
+              <div className="p-2 bg-white/80 rounded-xl w-fit shadow-2xs">{feat.icon}</div>
+              <div className="text-xs font-bold text-slate-900">{feat.title}</div>
+              <div className="text-[11px] text-slate-600 leading-relaxed">{feat.desc}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
-        <button
-          type="button"
-          onClick={() => setViewMode('graph2d')}
-          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
-            viewMode === 'graph2d'
-              ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-          }`}
-        >
-          <LayoutGrid size={14} className={viewMode === 'graph2d' ? 'text-[#84cc16]' : 'text-slate-400'} />
-          <span>2D Architecture Layers</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setViewMode('schema')}
-          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
-            viewMode === 'schema'
-              ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-          }`}
-        >
-          <Database size={14} className={viewMode === 'schema' ? 'text-amber-500' : 'text-slate-400'} />
-          <span>Data Structures & Schemas ({memory.schemas.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setViewMode('impact')}
-          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
-            viewMode === 'impact'
-              ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-          }`}
-        >
-          <Zap size={14} className={viewMode === 'impact' ? 'text-rose-500' : 'text-slate-400'} />
-          <span>Impact Blast-Radius</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setViewMode('rules')}
-          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
-            viewMode === 'rules'
-              ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-          }`}
-        >
-          <BookOpen size={14} className={viewMode === 'rules' ? 'text-blue-500' : 'text-slate-400'} />
-          <span>Architectural Rules ({memory.rules.length})</span>
-        </button>
+      {/* ── View Mode Navigation Tabs ───────────────────────────────── */}
+      <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl text-xs select-none flex-wrap">
+        {tabDefs.map((tab) => {
+          const isActive = viewMode === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setViewMode(tab.id)}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-semibold transition cursor-pointer ${
+                isActive
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+              }`}
+            >
+              <span className={isActive ? tab.iconActive : 'text-slate-400'}>{tab.icon}</span>
+              <span>{tab.label}</span>
+              {tab.badge !== undefined && tab.badge !== 0 && (
+                <span
+                  className={`text-[9px] font-mono font-bold px-1.5 rounded-full ${
+                    isActive ? 'bg-slate-100 text-slate-700' : 'bg-slate-300/60 text-slate-600'
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Backend error banner */}
+      {/* ── Backend Error Banner ─────────────────────────────────────── */}
       {backendError && (
         <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800">
           <AlertTriangle size={16} className="text-red-500 shrink-0 mt-0.5" />
@@ -402,23 +544,58 @@ export const CodeGraphSection: React.FC = () => {
         </div>
       )}
 
-      {/* Render Active View */}
-      {isRefreshing ? (
+      {/* ── Render Active View ───────────────────────────────────────── */}
+      {viewMode === 'mcp_tools' ? (
+        <MCPToolsPanel />
+      ) : isRefreshing ? (
         <div className="flex flex-col items-center justify-center h-64 bg-white border border-slate-200/80 rounded-2xl gap-3">
           <RefreshCw size={24} className="animate-spin text-[#94d320]" />
-          <p className="text-sm font-semibold text-slate-700">Scanning repository and building AST graph…</p>
+          <p className="text-sm font-semibold text-slate-700">Scanning repository — building AST knowledge graph…</p>
           <p className="text-xs text-slate-400 font-mono">{currentRepoUrl}</p>
+          <div className="flex items-center gap-4 text-[10px] text-slate-400 font-mono mt-1">
+            <span className="flex items-center gap-1"><CheckCircle2 size={10} className="text-lime-500" /> Invoking native binary</span>
+            <span className="flex items-center gap-1"><RefreshCw size={10} className="animate-spin text-lime-500" /> Parsing AST nodes</span>
+            <span className="flex items-center gap-1"><Activity size={10} className="text-slate-300" /> Building edges</span>
+          </div>
         </div>
       ) : !hasScanned ? (
-        <div className="flex flex-col items-center justify-center h-64 bg-white border border-dashed border-slate-300 rounded-2xl gap-3 text-center px-6">
-          <div className="w-12 h-12 rounded-2xl bg-[#edf8c7] flex items-center justify-center text-2xl">⚡</div>
-          <h3 className="text-sm font-bold text-slate-800">No Repository Indexed Yet</h3>
-          <p className="text-xs text-slate-500 max-w-sm">
-            Enter a <span className="font-semibold text-slate-700">local folder path</span> (e.g.{' '}
-            <code className="bg-slate-100 px-1 rounded text-slate-700 font-mono text-[10px]">C:\Users\srirag.cr\Desktop\UI_Demo_Astra\UI_demo</code>) above, then click{' '}
-            <span className="font-semibold text-slate-700">Scan & Visualize</span>.
-            Make sure the Python MCP server is running in Terminal 2.
-          </p>
+        <div className="space-y-5">
+          <div className="flex flex-col items-center justify-center h-48 bg-white border border-dashed border-slate-300 rounded-2xl gap-3 text-center px-6">
+            <div className="w-12 h-12 rounded-2xl bg-[#edf8c7] flex items-center justify-center text-2xl">⚡</div>
+            <h3 className="text-sm font-bold text-slate-800">No Repository Indexed Yet</h3>
+            <p className="text-xs text-slate-500 max-w-sm">
+              Enter a <span className="font-semibold text-slate-700">local folder path</span> or GitHub URL above, then click{' '}
+              <span className="font-semibold text-slate-700">Scan & Visualize</span>.
+              The native codebase-memory-mcp binary will index the AST in seconds.
+            </p>
+          </div>
+
+          {/* Capability Cards while waiting */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-2xs space-y-4">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <Cpu size={13} className="text-lime-600" />
+              <span>What you'll get after scanning</span>
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[
+                { icon: '🌌', title: '3D Celestial Graph', desc: 'Interactive force-directed knowledge sphere with clustering' },
+                { icon: '🏛️', title: 'Architecture Layers', desc: '5-layer canvas: API → Services → Models → Utils → Files' },
+                { icon: '🗺️', title: 'Multi-Lane Canvases', desc: 'Separate isolated canvas board per architectural layer' },
+                { icon: '⚡', title: 'Blast-Radius Analysis', desc: 'Identifies upstream callers & mandatory tests for any file' },
+                { icon: '📐', title: 'Schema Extraction', desc: 'Auto-extracts Pydantic, SQLAlchemy & TypeScript types' },
+                { icon: '🔧', title: '17 MCP CLI Tools', desc: 'search_graph, trace_path, detect_changes, query_graph & 13 more' },
+              ].map((item) => (
+                <div key={item.title} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-lg shrink-0">{item.icon}</span>
+                  <div>
+                    <div className="text-xs font-bold text-slate-900">{item.title}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">{item.desc}</div>
+                  </div>
+                  <ChevronRight size={12} className="text-slate-300 shrink-0 mt-0.5" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <>
@@ -433,13 +610,35 @@ export const CodeGraphSection: React.FC = () => {
               onRefresh={handleRefresh}
             />
           )}
-          {viewMode === 'graph2d' && <GraphCanvas nodes={memory.nodes} edges={memory.edges} />}
-          {viewMode === 'schema' && <SchemaViewer schemas={memory.schemas} />}
-          {viewMode === 'impact' && <ImpactRadiusViewer nodes={memory.nodes} edges={memory.edges} />}
-          {viewMode === 'rules' && <MemoryRulesPanel rules={memory.rules} />}
+
+          {viewMode === 'architecture' && (
+            <ArchitectureOverview
+              nodes={memory.nodes}
+              edges={memory.edges}
+              repoName={getRepoDisplayName()}
+              nodeTypesCount={memory.node_types_count}
+              edgeTypesCount={memory.edge_types_count}
+              dirCounts={memory.dir_counts}
+            />
+          )}
+
+          {viewMode === 'graph2d' && (
+            <GraphCanvas nodes={memory.nodes} edges={memory.edges} />
+          )}
+
+          {viewMode === 'schema' && (
+            <SchemaViewer schemas={memory.schemas} />
+          )}
+
+          {viewMode === 'impact' && (
+            <ImpactRadiusViewer nodes={memory.nodes} edges={memory.edges} />
+          )}
+
+          {viewMode === 'rules' && (
+            <MemoryRulesPanel rules={memory.rules} />
+          )}
         </>
       )}
     </div>
   );
 };
-
